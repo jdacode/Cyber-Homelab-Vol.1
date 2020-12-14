@@ -1,0 +1,5 @@
+<network>
+  <name>net4-dev</name>
+  <bridge name='virbr4' stp='on' delay='0'/>
+  <domain name='net4-dev'/>
+</network>

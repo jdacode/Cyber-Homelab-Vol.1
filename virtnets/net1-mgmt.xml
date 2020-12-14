@@ -1,0 +1,5 @@
+<network>
+  <name>net1-mgmt</name>
+  <bridge name='virbr1' stp='on' delay='0'/>
+  <domain name='net1-mgmt'/>
+</network>

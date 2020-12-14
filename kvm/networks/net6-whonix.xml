@@ -1,0 +1,14 @@
+<!--
+WARNING: THIS IS AN AUTO-GENERATED FILE. CHANGES TO IT ARE LIKELY TO BE
+OVERWRITTEN AND LOST. Changes to this xml configuration should be made using:
+  virsh net-edit net6-whonix
+or other application using the libvirt API.
+-->
+
+<network>
+  <name>net6-whonix</name>
+  <uuid>aaaaaaa-bbbb-cccc-dddd-eeeeeeefffffff</uuid>
+  <bridge name='virbr6' stp='on' delay='0'/>
+  <mac address='11:11:11:11:11:11'/>
+  <domain name='net6-whonix'/>
+</network>

@@ -1,0 +1,5 @@
+<network>
+  <name>net5-disposable</name>
+  <bridge name='virbr5' stp='on' delay='0'/>
+  <domain name='net5-disposable'/>
+</network>

@@ -1,0 +1,5 @@
+<network>
+  <name>net7-ops</name>
+  <bridge name='virbr7' stp='on' delay='0'/>
+  <domain name='net7-ops'/>
+</network>

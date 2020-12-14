@@ -1,0 +1,5 @@
+<network>
+  <name>net8-windows</name>
+  <bridge name='virbr8' stp='on' delay='0'/>
+  <domain name='net8-windows'/>
+</network>

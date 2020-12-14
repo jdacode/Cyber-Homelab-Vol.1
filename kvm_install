@@ -1,0 +1,535 @@
+Linux Hypervisor Setup (libvirt/qemu/kvm)
+
+KVM requires a CPU with virtualization extensions, found on most consumer CPUs. These extensions are called Intel VT or AMD-V. To check whether you have CPU support, run the following command:
+    $ egrep '^flags.*(vmx|svm)' /proc/cpuinfo
+    $ LC_ALL=C lscpu | grep Virtualization
+    $ grep -E --color=auto 'vmx|svm|0xc0f' /proc/cpuinfo
+    
+
+Installing virtualization software
+    $ dnf groupinfo virtualization
+    
+
+
+Run the following command to install the mandatory and default packages in the virtualization group:
+
+    # dnf install @virtualization
+
+Alternatively, to install the mandatory, default, and optional packages, run:
+
+    # dnf group install --with-optional virtualization
+
+After the packages install, start the libvirtd service:
+
+    # systemctl start libvirtd
+
+To start the service on boot, run:
+
+    # systemctl enable libvirtd
+
+To verify that the KVM kernel modules are properly loaded:
+
+    └──╼ $ lsmod | grep kvm
+    kvm_intel             319488  0
+    kvm                   823296  1 kvm_intel
+    irqbypass              16384  1 kvm
+
+If this command lists kvm_intel or kvm_amd, KVM is properly configured.
+
+
+PERMISSIONS
+
+Fedora automatically create the necessary rule
+
+sudo cat /usr/share/polkit-1/rules.d/50-libvirt.rules
+// Allow any user in the 'libvirt' group to connect to system libvirtd
+// without entering a password.
+
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.libvirt.unix.manage" &&
+        subject.isInGroup("libvirt")) {
+        return polkit.Result.YES;
+    }
+});
+
+
+You may add your user to the libvirt group, otherwise you will be prompted to enter the root password.
+
+    $ who
+    $ users
+    $ cat /etc/group    -> [group_name:password:GID:users]
+    $ cat /etc/group | grep libvirt
+    $ getent passwd | grep -i qemu
+    $ getent passwd | egrep qemu
+    $ getent group libvirt
+    $ groups user
+    
+Open the /etc/libvirt/libvirtd.conf file for editing
+    # sudo vi /etc/libvirt/libvirtd.conf
+
+
+Set the domain socket group ownership to libvirt
+    # unix_sock_group = "libvirt"
+
+
+Adjust the UNIX socket permissions for the R/W socket
+    # unix_sock_rw_perms = "0770"
+
+add user to group
+    # sudo usermod -a -G libvirt $(whoami)
+    $ getent group libvirt
+
+virsh, will use qemu:///session by default, which means CLI calls not run as sudo will be looking at a different user. To ensure all client utilities default to qemu:///system, add the following configuration to your .config directory.
+
+    virsh list --all
+    Id   Name                    State
+    ----------------------------------------
+    
+    sudo cp -v /etc/libvirt/libvirt.conf ~/.config/libvirt/
+    sudo chown user:user  ~/.config/libvirt/libvirt.conf
+    sudo nano ~/.config/libvirt/libvirt.conf
+    UNCOMMENT #
+    uri_default = "qemu:///system"
+
+    virsh list --all
+    Id   Name                    State
+    ----------------------------------------
+    -    net0_firewall_pfsense   shut off
+
+    
+Start virt
+    $ virt-manager
+
+
+
+
+TROUBLESHOOTING
+
+Unable to complete install: 'Cannot set interface MAC on 'wlp0s20f3': Device or resource busy'
+
+
+
+    
+
+    
+    **************
+    
+Listing current pools:
+    $ virsh pool-list 
+
+
+
+    
+    ------------------
+    
+    Error: No bootable device
+    if wont start change settings:
+        Boot options 1: IDE CDROM
+        CPU: system
+
+        
+        
+        
+**************************
+
+
+
+
+    Type: preset to Passthrough
+    Mode: change to Mapped This is the most important step in this blog, or you will not get read/write support!
+    Source path: select the path on your host that will be shared with this guest. I use /var/lib/libvirt/share but you can use any directory you want
+    Target path: enter magic string that you’ll use in the mount command in the guest. I use share, no slashes or anything. In reality this isn’t a path per se, it’s a tag that the guest sends to the kernel 9p driver via the mount command
+    
+    sudo rm -r KVM
+    sudo mkdir KVM
+    virsh pool-define-as --name vms --type dir --target /home/KVM/
+
+
+    #!/bin/bash
+
+virt-install \
+--virt-type kvm \
+--name debian10 \
+--os-variant debian10 \
+--vcpus 1 \
+--cpu host-passthrough \
+--ram 2048 \
+--disk path=~/debian10.img,format=raw,size=40,sparse=true,bus=scsi,discard=unmap \
+--controller type=scsi,model=virtio-scsi \
+--graphics spice,gl.enable=no,listen=none \
+--video virtio,accel3d=yes \
+--soundhw ich6 \
+--input tablet,type=virtio \
+--network bridge=br0,model=virtio \
+--metadata title='Debian Buster' \
+--filesystem type=mount,mode=passthrough,source=/home/simon/mymount,target=mymount \
+--cdrom ~/debian-10.2.0-amd64-DVD-1.iso
+
+
+<<COMMENTS
+on guest to allow filesystem mounting etc:
+    sudo apt install qemu-guest-agent spice-vdagent
+    sudo  mount -t 9p -o trans=virtio mymount /home/simon/mymount
+to fix auto-resizing of the window, run this - not needed with gnome, but is with mate etc:
+    xrandr --output Virtual-1 --auto
+COMMENTS
+
+    
+
+************************************
+
+NETWORK
+
+    virsh net-list
+    virsh net-destroy --network default
+    virsh net-undefine --network default 
+    sudo ls -hals /etc/libvirt/qemu/networks/
+    sudo ls -hals /etc/libvirt/qemu/networks/autostart/
+
+
+
+************************************
+
+SSHFS
+
+Check if SSHFS is installed
+    sshfs --version
+    rpm -qa | grep -i sshfs
+
+Install SSHFS [host-guest]
+    dnf install fuse-sshfs
+
+Activate SSH [host - guess]
+    sudo systemctl status sshd
+    sudo systemctl start sshd
+    sudo systemctl enable sshd
+
+
+Note: Add the rule to ping in Pfsense. 
+Test the connection [guest]
+    ping <ip>
+    nc -vz <ip> <port>
+    nmap -p <port> <ip>
+    ssh <username>@<ip>
+check routes [not important]
+    ip routes
+    route
+    
+Preparing the share folder
+    cat /etc/group
+    cat /etc/group | grep libvirt
+    getent passwd | grep -i qemu
+    groups qemu
+    sudo chown -hR qemu:libvirt fs_vms/
+    
+Connect SSHFS [guest]
+    sshfs <username>@<ip>:/<remote folder path>/ /<local folder path>/
+    or 
+    # Use "-o reconect" to allow the client to reconnect
+    sshfs <username>@<ip>:/<remote folder path>/ /<local folder path>/ -o reconnect
+    mount | egrep <name>
+    umount /<local folder path>/
+    or
+    fusermount -u /<local folder path>/
+
+
+    mkdir Documents/kvmfs/
+    sshfs user@192.168.1.2:/home/fs_vms/net1/ /home/vm_user/Documents/kvmfs/
+
+Setup SSH Passwordless Login [guest]
+    ls -al ~/.ssh/id_*.pub
+        No such file or directory 
+        
+NOTE: The ssh-keygen tool will ask you to type a secure passphrase. Whether you want to use passphrase it’s up to you, if you choose to use passphrase you will get an extra layer of security. In most cases, developers and system administrators use SSH without a passphrase because they are useful for fully automated processes. If you don’t want to use a passphrase just press Enter.
+
+    ssh-keygen -t rsa -b 4096 -f /home/user/.ssh/net1
+    ssh-keygen -f /home/vm_user/.ssh/net1
+    ls ~/.ssh/net*
+    
+permissions: 
+    Private key - 600
+    Public key - 644
+    
+    ls -hals <path>
+    chmod 600 foldername
+    chmod 644 foldername
+
+    
+    r: Read permissions. The file can be opened, and its content viewed.
+    w: Write permissions. The file can be edited, modified, and deleted.
+    x: Execute permissions. If the file is a script or a program, it can be run (executed).
+    
+    0: (000) [---] No permission.
+    1: (001) [--x] Execute permission.
+    2: (010) [-w-] Write permission.
+    3: (011) [-wx] Write and execute permissions.
+    4: (100) [r--] Read permission.
+    5: (101) [r-x] Read and execute permissions.
+    6: (110) [rw-] Read and write permissions.
+    7: (111) [rwx] Read, write, and execute permissions.
+
+    -rw-------.
+    -110000000.
+    -rw-r--r--.
+    -110100100.
+    
+Sharing keys [guest]
+    ssh-copy-id -i .ssh/key-with-pass.pub user@destination
+    ssh-copy-id -i .ssh/net1.pub user@192.168.1.2
+Test the connection
+    ssh <username>@<ip>
+        should connect automatically
+   
+   
+*** SSHFS OVERALL ***   
+Mounting a remote file system on startup
+    [Host]
+        create folder netX 
+    [Host-Guest]
+        dnf install fuse-sshfs -y 
+    [Guest]
+        mkdir Documents/kvmfs/ 
+    [Guest]
+        ssh-keygen
+            <name>
+            <password>
+    [Guest]
+        ssh-copy-id -i .ssh/key-with-pass.pub user@destination
+            <password>
+    [Host]
+        ls ~/.ssh/net* 
+    #[Guest]
+    #    ssh-agent
+    #    eval $(ssh-agent)
+    #    ssh-add ~/.ssh/<private-key>
+    #[Guest]
+    #    sshfs [user@]host:[remote-dir] [mountpoint_local-dir] [options]
+    #[Guest - /etc/fstab]    
+    #sudo nano /etc/fstab
+    #add:
+    #    [user@]host:[remote-dir] [mountpoint_local-dir] sshfs
+    
+    WHEN GUEST RESTARTS EVERYTIME:
+    #    eval `ssh-agent`
+        sshfs [user@]host:[remote-dir] [mountpoint_local-dir]
+    #        <host password>
+    
+    RECOVERY 
+        Cannot open access to console, the root account is locked.
+        See sulogin(8) man page for more details.
+
+        Press Enter to continue.
+    
+    1. liveCD
+    2. sudo mount /dev/vda2 /mnt/
+    3. sudo nano mnt/root/etc/fstab
+    
+    
+    [host]
+    Unmount sshfs
+        fusermount -u [mountpoint_local-dir]
+        
+    
+    
+    
+**********************************************
+
+Disable CLIPBOARD
+
+
+    1. You need to have libvirt package installed to use virsh.
+    2. Type in terminal: virsh edit NAME where NAME is the name of your guest. The Domain XML is opened with vim in your terminal. If you are not familiar with the commands, find yourself a cheat sheet.
+    3. Under <devices> find <graphics> and inside add the line <clipboard copypaste='no'/>. Save and exit. For further information search in their docs. https://libvirt.org/formatdomain.html#elementsGraphics
+    OR
+    virt-manager > View > Details >> Display Spice > XML > <graphics> <clipboard copypaste='no'/> <clipboard copypaste='yes'/> </graphics>
+    4. Restart the guest. And you will notice that the clipboard sharing is gone.
+    
+    
+*********************************************
+
+MULTIPLE DISPLAY MONITORS
+
+    On that virtual machine’s “Display spice” virtual hardware, modify the address tag to “All interfaces.” Also note the the port number given to this guest. In my screenshot you can see mine is port <port>.
+    
+    remote-viewer spice://vm1.ipa.example.com:<port>
+    remote-viewer spice://localhost:<port>
+
+    
+    
+*****************************
+
+
+AFTER INSTALL FEDORA
+
+sudo dnf install lm_sensors
+sudo sensors-detect
+[yes all]
+sensors
+htop 
+nvidia drivers
+
+
+remote-viewer spice://localhost:<port>
+
+
+<video>
+  <model type="qxl" ram="65536" vram="65536" vgamem="16384" heads="3" primary="yes"/>
+  <alias name="video0"/>
+  <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x0"/>
+</video>
+
+<video>
+  <model type="qxl" ram="131072" vram="65536" vgamem="65536" heads="3" primary="yes"/>
+  <alias name="video0"/>
+  <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x0"/>
+</video>
+
+<graphics type="spice" port="5901" autoport="yes" listen="127.0.0.1">
+  <listen type="address" address="127.0.0.1"/>
+</graphics>
+
+--------------------
+
+VM labels
+
+net0-firewall-pfsense
+net1-mgmt-fedora
+net2-personal-fedora
+net3-vault-fedora
+net4-dev-fedora
+net5-disposable-fedora
+net6-tor-fedora
+net7-ops-fedora
+net8-windows-fedora
+
+**********************************
+
+SNAPSHOT
+
+    virsh list
+    virsh snapshot-list --domain net0-firewall-pfsense 
+    virsh dumpxml net0-firewall-pfsense | grep -i qemu
+    virsh snapshot-info --domain net0-firewall-pfsense --current 
+    virsh snapshot-current --domain net0-firewall-pfsense
+    virsh snapshot-current --domain net0-firewall-pfsense --snapshotname snapshot1
+    
+    
+    
+    
+////////////////////////////////////////
+
+
+VIRSH BACKUP
+
+virsh domblklist <DOMAIN> --details
+virsh dumpxml <DOMAIN>
+
+
+///////////////////////////////////////
+
+TODO
+
+Virt-manager:
+
+- Delete unused features [serial - Sound - tablet]
+- Add NIC and network source [Device model: virtio]
+- Details > Video QXL > Model: Virtio  [Best functionality for resizing]
+- Clipboard
+- Video Virtio > Heads > 3
+
+
+Firewall
+- Aliases - IP and ports
+- Deny access to Firewall all Networks
+
+Basic_Internet
+67 - DHCP
+53 - DNS
+443 - HTTPS
+80 - HTTP
+22 - SSH
+
+Open_Internet
+67 - DHCP
+53 - DNS
+443 - HTTPS
+80 - HTTP
+
+No_Internet
+67 - DHCP
+22 - SSH
+
+
+Labels
+LAN Network
+Allow traffic only LAN Network
+Internet Access
+Allow All
+Deny All
+Deny access to firewall GUI
++Gnome Favorites
++Gnome Settings
++update
++settings firefox
++firefox addons
++uninstall software
++Terminal color
++snapshot
+
+
+VM: 
+
+- Gnome Favorites
+- Gnome Settings
+- Random MAC (maybe?)
+- sudo dnf update
+- dnf install fuse-sshfs
+- settings firefox
+- firefox addons
+- uninstall software
+- Terminal color
+- snapshot
+
+
+
+
+VM
+remote-viewer spice://localhost:<port>
+
+***
+<video>
+    <model heads="3">
+    <model heads="1">
+***
+<graphics type="spice" autoport="yes">
+<graphics type="spice" autoport="no">
+
+<graphics type="spice" port="5901" autoport="yes" listen="127.0.0.1">
+  <listen type="address" address="127.0.0.1"/>
+</graphics>
+
+<graphics> 
+    <clipboard copypaste='no'/> 
+    <clipboard copypaste='yes'/> 
+</graphics>
+
+
+WINDOWS 10
+https://www.spice-space.org/download.html
+
+KALI LINUX
+sudo apt install spice-vdagent
+
+
+DEV
+vsCodium
+	Extentions: /home/{username}/.vscode-oss/extentions/
+	Multimonitor: Command Palette [ctrl+shft+p] > "Workspaces: Duplicate Workspace in New Window"
+	Multimonitor: Settings [ctrl+,] > Auto Save > "afterDelay" - Auto Save Delay > "1000" (Default)
+
+firefox
+    +RAM
+    Gah. Your tab just crashed
+        about:config
+        browser.tabs.remote.autostart = false
+        browser.tabs.remote.autostart.2 = false 

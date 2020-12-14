@@ -1,0 +1,13 @@
+<network>
+  <name>net0-firewall</name>
+  <forward dev='wlp0s20f3' mode='nat'>
+    <nat>
+        <port start="1024" end="65535"/>
+    </nat>
+    <interface dev='wlp0s20f3'/>
+  </forward>
+  <bridge name='virbr0' stp='on' delay='0'/>
+  <domain name='net0-firewall'/>
+  <ip address='192.168.168.1' netmask='255.255.255.252'>
+  </ip>
+</network>

@@ -1,0 +1,5 @@
+<network>
+  <name>net2-personal</name>
+  <bridge name='virbr2' stp='on' delay='0'/>
+  <domain name='net2-personal'/>
+</network>

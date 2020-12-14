@@ -1,0 +1,5 @@
+<network>
+  <name>net3-vault</name>
+  <bridge name='virbr3' stp='on' delay='0'/>
+  <domain name='net3-vault'/>
+</network>

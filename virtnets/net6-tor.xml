@@ -1,0 +1,5 @@
+<network>
+  <name>net6-tor</name>
+  <bridge name='virbr6' stp='on' delay='0'/>
+  <domain name='net6-tor'/>
+</network>
